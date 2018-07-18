@@ -6,9 +6,4 @@
 build.sbt
 .gitignore
 *.conf
-.idea/inspectionProfiles/
-project/target/streams/compile/compileIncSetup/
-src/test/
-project/target/config-classes/$65045edf33de915b26d2.cache
-project/target/config-classes/$b60554696da419db3473.cache
-target/scala-2.12/classes/
+.idea

@@ -3,7 +3,14 @@
 *.class
 *.log
 
-build.sbt
 .gitignore
-*.conf
-.idea
+.idea/inspectionProfiles/
+project/target/config-classes/$65045edf33de915b26d2$.class
+project/target/config-classes/$65045edf33de915b26d2.class
+project/target/config-classes/$b60554696da419db3473$.class
+project/target/config-classes/$b60554696da419db3473.class
+project/target/streams/compile/compileIncSetup/
+src/test/
+target/scala-2.12/classes/
+/src/main/resources
+build.sbt

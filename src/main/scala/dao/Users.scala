@@ -1,10 +1,10 @@
-package DAO
+package dao
 
 import java.util.Date
 
-import Models.User
-import Mongo.Helpers
-import Timing.Timing
+import models.User
+import mongo.Helpers
+import timing.Timing
 import com.typesafe.config.ConfigFactory
 import info.mukel.telegrambot4s.models.Message
 import org.bson.codecs.configuration.CodecRegistries.{fromProviders, fromRegistries}
@@ -21,7 +21,7 @@ import org.mongodb.scala.{MongoClient, MongoCollection}
   and creating CRUD operations.
  */
 
-object Users extends App with Helpers with Timing{
+class Users(mongoClient: MongoClient, db: String) extends Helpers with Timing{
 
   //Applying current case class to mongo BsonDocument
   def apply(chatId: Long,
@@ -30,20 +30,9 @@ object Users extends App with Helpers with Timing{
       chatId,
       notifications)
 
-  //Setting up client and connection to MongoDB
-  val config =  ConfigFactory.parseResources("application.conf")
-  val driver = config.getString("mongodb.driver")
-  val username = config.getString("mongodb.username")
-  val password = config.getString("mongodb.password")
-  val url = config.getString("mongodb.url")
-  val port = config.getString("mongodb.port")
-  val db = config.getString("mongodb.database")
-
-
-  val mongoClient = MongoClient(s"$driver://$username:$password@$url:$port/$db")
-  val userCodecRegistry: CodecRegistry = fromRegistries(fromProviders(classOf[User]), DEFAULT_CODEC_REGISTRY )
-  val database = mongoClient.getDatabase(s"$db").withCodecRegistry(userCodecRegistry)
-  val userCollection: MongoCollection[User] = database.getCollection("users")
+  private val userCodecRegistry: CodecRegistry = fromRegistries(fromProviders(classOf[User]), DEFAULT_CODEC_REGISTRY )
+  private val database = mongoClient.getDatabase(db).withCodecRegistry(userCodecRegistry)
+  private val userCollection: MongoCollection[User] = database.getCollection("users")
 
 
   //CRUD OPERATIONS
@@ -59,8 +48,8 @@ object Users extends App with Helpers with Timing{
   }
 
   //Update notifications for user
-  def update(oldValue: Boolean, newValue: Boolean) =
-      userCollection.updateOne(equal("notifications", oldValue), set("notifications", newValue)).printHeadResult()
+  def update(chatId: Long, newValue: Boolean) =
+      userCollection.updateOne(equal("chatId", chatId), set("notifications", newValue)).printHeadResult()
 
   //Check if user exists
   def exist(chatId: Long): Boolean = {

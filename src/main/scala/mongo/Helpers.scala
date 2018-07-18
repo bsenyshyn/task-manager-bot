@@ -1,4 +1,4 @@
-package Mongo
+package mongo
 
 import java.util.concurrent.TimeUnit
 

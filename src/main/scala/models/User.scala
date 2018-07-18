@@ -1,4 +1,4 @@
-package Models
+package models
 
 import org.mongodb.scala.bson.ObjectId
 

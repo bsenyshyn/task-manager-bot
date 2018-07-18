@@ -1,10 +1,10 @@
-package DAO
+package dao
 
 import java.util.Date
 
-import Models.Task
-import Mongo.{Counter, Helpers}
-import Timing.Timing
+import models.Task
+import mongo.{Counter, Helpers}
+import timing.Timing
 import info.mukel.telegrambot4s.models.{CallbackQuery, Message}
 import org.bson.codecs.configuration.CodecRegistries.{fromProviders, fromRegistries}
 import org.bson.codecs.configuration.CodecRegistry
@@ -21,7 +21,7 @@ import com.typesafe.config.ConfigFactory
   and creating CRUD operations.
  */
 
-object Tasks extends App with Helpers with Timing{
+class Tasks(mongoClient: MongoClient, db: String) extends Helpers with Timing {
 
   //Applying current case class to mongo BsonDocument
   def apply(chatId: Long,
@@ -38,26 +38,16 @@ object Tasks extends App with Helpers with Timing{
       timeSpan,
       iterations)
 
-  //Setting up client and connection to MongoDB
-  val config =  ConfigFactory.parseResources("application.conf")
-  val driver = config.getString("mongodb.driver")
-  val username = config.getString("mongodb.username")
-  val password = config.getString("mongodb.password")
-  val url = config.getString("mongodb.url")
-  val port = config.getString("mongodb.port")
-  val db = config.getString("mongodb.database")
-
-  val mongoClient = MongoClient(s"$driver://$username:$password@$url:$port/$db")
-  val taskCodecRegistry: CodecRegistry = fromRegistries(fromProviders(classOf[Task]), DEFAULT_CODEC_REGISTRY )
-  val database = mongoClient.getDatabase(s"$db").withCodecRegistry(taskCodecRegistry)
-  val taskCollection: MongoCollection[Task] = database.getCollection("tasks")
+  private val taskCodecRegistry: CodecRegistry = fromRegistries(fromProviders(classOf[Task]), DEFAULT_CODEC_REGISTRY)
+  private val database = mongoClient.getDatabase(db).withCodecRegistry(taskCodecRegistry)
+  private val taskCollection: MongoCollection[Task] = database.getCollection("tasks")
 
 
   //CRUD OPERATIONS
 
   //Creating new task
   def create(task: Task): String = {
-    if(taskCollection.insertOne(task).results() != Nil)
+    if (taskCollection.insertOne(task).results() != Nil)
       "New task was added!"
     else
       "Error while adding task."
@@ -81,12 +71,15 @@ object Tasks extends App with Helpers with Timing{
   //Delete task
   def delete(_id: ObjectId) = taskCollection.deleteOne(equal("_id", _id)).printHeadResult("Result of deleting: ")
 
+  //Delete all tasks
+  def deleteAll(_id: ObjectId) = taskCollection.deleteMany(equal("_id", _id))
+
   //Finish task
   def finishTask(_id: ObjectId) =
-    taskCollection.updateOne(equal("_id",_id),set("status",true)).printHeadResult("Finished task: ")
+    taskCollection.updateOne(equal("_id", _id), set("status", true)).printHeadResult("Finished task: ")
 
   //Deleting tasks which completed (further purposes)
-  def deleteWhichCompleted = taskCollection.deleteMany(equal("status",true)).printResults()
+  def deleteWhichCompleted = taskCollection.deleteMany(equal("status", true)).printResults()
 
   //Counting tasks in specific chat
   def countTasks(chatId: Long) = taskCollection.find(equal("chatId", chatId)).results().size
@@ -97,7 +90,7 @@ object Tasks extends App with Helpers with Timing{
 
   //Formatting date
   def readDate(date: Date): String =
-    s"${date.getHours}:${date.getMinutes}; ${date.getDate}/${date.getMonth + 1}/${date.getYear - 100}"
+    s"${date.getDate}-${date.getMonth + 1}-${date.getYear + 1900}/${date.getHours}:${date.getMinutes}"
 
   //Format collection to string
   def colToString(collection: Seq[Task]): String = {
@@ -105,22 +98,22 @@ object Tasks extends App with Helpers with Timing{
     val counter = new Counter
 
     //Formatting different occasions
-    if(collection.isEmpty) "No tasks found!"
+    if (collection.isEmpty) "No tasks found!"
     else {
       val tasks = collection.toList.map {
         case t if t.date.isDefined =>
           counter.add
-          s"#${counter.get}\nText: ${t.text}\nDate: ${readDate(t.date.get)}\nStatus: ${readStatus(t.status)}\n\n"
+          s"№${counter.get}\nText: ${t.text}\nDate: ${readDate(t.date.get)}\nStatus: ${readStatus(t.status)}\n\n"
 
         case t if t.timeSpan.isDefined =>
           counter.add
-          s"#${counter.get}\nText: ${t.text}\nTime Span: ${t.timeSpan.get}\nIterates: " +
+          s"№${counter.get}\nText: ${t.text}\nTime Span: ${t.timeSpan.get}\nIterates: " +
             s"${t.iterations.get}\nStatus: ${readStatus(t.status)}\n\n"
 
 
         case t if t.timeSpan.isEmpty && t.date.isEmpty =>
           counter.add
-          s"#${counter.get}\nText: ${t.text}\nStatus: ${readStatus(t.status)}\n\n"
+          s"№${counter.get}\nText: ${t.text}\nStatus: ${readStatus(t.status)}\n\n"
       }
       tasks.mkString
     }
@@ -136,7 +129,7 @@ object Tasks extends App with Helpers with Timing{
   def getDeleteCallback(cbq: CallbackQuery): String = s"${cbq.from.firstName} has deleted task with id: ${cbq.data.get}"
 
   def getFinishedCallback(msg: Message): String = s"${msg.chat.firstName.get} has finished task"
-  
+
   /*
   CREATING DIFFERENT TASKS
   - Normal task - task without date, just a simple one
@@ -145,7 +138,7 @@ object Tasks extends App with Helpers with Timing{
    */
 
   def createNormalTask(text: Array[String], msg: Message): String = {
-    if(!text.forall(t => empty(t, t.indexOf(t)))) {
+    if (!text.forall(t => empty(t, t.indexOf(t)))) {
       val task = Task(new ObjectId(), msg.from.get.id, text(0), false)
       create(task)
     }
@@ -153,7 +146,7 @@ object Tasks extends App with Helpers with Timing{
   }
 
   def createTimeTask(text: Array[String], msg: Message) = {
-    if(!text.forall(t => empty(t,t.indexOf(t)))) {
+    if (!text.forall(t => empty(t, t.indexOf(t)))) {
       val date = getTimeFormat(text(1))
       val task = Task(new ObjectId(), msg.from.get.id, text(0), false, Some(date))
       create(task)
@@ -162,7 +155,7 @@ object Tasks extends App with Helpers with Timing{
   }
 
   def createEverydayTask(text: Array[String], msg: Message) = {
-    if(!text.forall(t => empty(t,t.indexOf(t)))) {
+    if (!text.forall(t => empty(t, t.indexOf(t)))) {
       val task = Task(new ObjectId(), msg.from.get.id, text(0), false,
         None, Some(text(1)), Some(text(2)))
       create(task)
@@ -171,35 +164,28 @@ object Tasks extends App with Helpers with Timing{
   }
 
   def empty(str: String, index: Int): Boolean =
-    str match {
-      case t if t.equals("") || t.equals(" ") => true
-      case t if index == 1 && !t.contains("^[0-9]*$") => true
-      case t if index == 2 && !t.contains("^[0-9]*$") => true
-    }
+    if (str.equals("") || str.equals(" ")) true
+    else if (index == 1 && !str.contains("^[0-9]*$")) true
+    else if (index == 2 && !str.contains("^[0-9]*$")) true
+    else false
 
-  def check(str: String): String = {
+  def check(str: String, message: Message): String = {
     val arr = str.split(", ").drop(1)
-
+    val text = str.split(", ")
     if (!arr.isEmpty){
       val first = arr(0)
       val len = arr.length
       if (len == 1){
         if(first.length > 10){
-          if (first(10) == '/') str
+          if (first(10) == '/') createTimeTask(text, message)
           else "False!"
         }
         else if (first.length == 5){
-          if (first(2) == '-'){
-            val range = first.split('-')
-            val range1 = range(0).toInt
-            val range2 = range(1).toInt
-            if(range2 > range1) str
-            else "False!"
-          }
+          if (first(2) == ':') createTimeTask(text, message)
           else "False!"
         }
-        else if (first == "s") str
-        else "False"
+        else if (first == "s") createNormalTask(text, message)
+        else "False!"
       }
       else if (len == 2) {
         if (first.length == 5) {
@@ -210,7 +196,7 @@ object Tasks extends App with Helpers with Timing{
             val range = first.split('-')
             val range1 = range(0).toInt
             val range2 = range(1).toInt
-            if(range2 > range1) str
+            if(range2 > range1) createEverydayTask(text, message)
             else "False!"
           }
           else "False!"

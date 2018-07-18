@@ -1,8 +1,8 @@
 import java.util.Date
 
-import DAO.Tasks
-import Models.Task
-import Timing.Timing
+import dao.Tasks
+import models.Task
+import timing.Timing
 import akka.actor.{Actor, ActorSystem, Cancellable, Props}
 import info.mukel.telegrambot4s.methods.SendMessage
 import org.mongodb.scala.bson.ObjectId
@@ -10,6 +10,8 @@ import TaskManagerBot.request
 import java.time.Duration
 
 import scala.concurrent.duration._
+
+import mongo.Connection._
 
 object Notifications extends Timing {
 
@@ -58,17 +60,17 @@ object Notifications extends Timing {
 
   //Helper methods
   def getTaskNotification(taskId: ObjectId): String = {
-    val task = Tasks.read(taskId)
+    val task = tasks.read(taskId)
     new Date().getHours match {
-      case hours: Int if hours <= 12  => s"Good morning! Time to do this: ${task.text}!"
-      case hours: Int if hours > 12 && hours < 20  => s"Good afternoon! Time to do this: ${task.text}!"
-      case hours: Int if hours > 20 => s"Good evening! Time to do this: ${task.text}!"
+      case hours: Int if hours < 12  => s"Good morning! Time to do this: ${task.text}!"
+      case hours: Int if hours < 20 && hours >= 12  => s"Good afternoon! Time to do this: ${task.text}!"
+      case hours: Int if hours >= 20 && hours < 24 => s"Good evening! Time to do this: ${task.text}!"
     }
   }
 
   def getScheduleTime(str: String, iterations: Int): Array[Date] = {
     val range = str.split("-").map(_.toInt)
-    (range(0) to range(1)).toArray.filter(i => i % iterations == 0).map{ t => getTimeFormat(s"$t:00:00")}
+    (range(0) to range(1)).toArray.filter(i => i % iterations == 0).map{ t => getTimeFormat(s"$t:00")}
   }
 
   def getDelay(date: Date): FiniteDuration = {
